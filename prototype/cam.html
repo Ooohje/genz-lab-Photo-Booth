@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>폰 카메라 · 2026 GALAXY IDEATHON</title>
+<link rel="icon" type="image/png" href="favicon.png" />
+<style>
+  *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{font-family:"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; color:#fff;
+    background:linear-gradient(160deg,#0a1a6e,#241a7a,#14103a); overflow:hidden;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:20px;}
+  .kicker{font-size:12px; letter-spacing:3px; color:#4dd8ff; text-transform:uppercase; font-weight:700;}
+  h1{font-size:22px; text-align:center;}
+  .frame{position:relative; width:min(86vw, calc((100dvh - 230px) * 0.775)); aspect-ratio:31/40;
+    border-radius:18px; overflow:hidden; background:#000; border:1px solid rgba(255,255,255,.15);
+    box-shadow:0 0 40px rgba(124,77,255,.3);}
+  video{width:100%; height:100%; object-fit:cover; transform:scaleX(-1);}
+  .badge{position:absolute; top:12px; left:12px; padding:6px 12px; border-radius:999px;
+    font-size:13px; font-weight:700; background:rgba(0,0,0,.55);}
+  .badge.live{background:#e8384f;}
+  .status{font-size:14px; opacity:.85; text-align:center; line-height:1.5;}
+  button{font-family:inherit; border:none; color:#fff; cursor:pointer;}
+  .btn{background:rgba(255,255,255,.12); font-weight:700; font-size:15px; padding:12px 22px; border-radius:999px;}
+  .hint{font-size:12px; opacity:.6; text-align:center; line-height:1.6; max-width:320px;}
+</style>
+</head>
+<body>
+  <div class="kicker">2026 GALAXY IDEATHON</div>
+  <h1>📷 폰이 카메라가 됩니다</h1>
+  <div class="frame">
+    <video id="preview" playsinline autoplay muted></video>
+    <div class="badge" id="badge">연결 중…</div>
+  </div>
+  <div class="status" id="status">태블릿과 연결하는 중이에요…</div>
+  <button class="btn" id="flipBtn">카메라 전환 (전/후면)</button>
+  <div class="hint">이 화면을 켜둔 채로 두세요. 태블릿에서 촬영을 진행합니다.<br>화면이 꺼지면 연결이 끊길 수 있어요.</div>
+
+<script>
+const room = new URLSearchParams(location.search).get('room') || '';
+const statusEl = document.getElementById('status');
+const badge = document.getElementById('badge');
+let ws, pc, stream, facing = 'user', sender = null, ready = false;
+let videoDevices = [], devIndex = 0;
+
+function setStatus(t){ statusEl.textContent = t; }
+function setBadge(t, live){ badge.textContent = t; badge.classList.toggle('live', !!live); }
+
+async function getCam(deviceId){
+  const video = deviceId
+    ? { deviceId:{exact:deviceId}, width:{ideal:1920}, height:{ideal:1080} }
+    : { facingMode: facing, width:{ideal:1920}, height:{ideal:1080} };
+  return navigator.mediaDevices.getUserMedia({ video, audio:false });
+}
+async function listCams(){
+  try{ const ds = await navigator.mediaDevices.enumerateDevices(); videoDevices = ds.filter(d=>d.kind==='videoinput'); }
+  catch(e){ videoDevices = []; }
+}
+function matchFacing(label, want){
+  const l = (label||'').toLowerCase();
+  if(want==='environment') return /back|rear|environment|후면|후방|외부/.test(l);
+  return /front|user|face|전면|셀피|셀카/.test(l);
+}
+function curDeviceId(){ return videoDevices[devIndex] && videoDevices[devIndex].deviceId; }
+
+async function init(){
+  if(!room){ setStatus('잘못된 접속이에요. 태블릿의 QR로 다시 접속해 주세요.'); return; }
+  try{
+    stream = await getCam();
+    document.getElementById('preview').srcObject = stream;
+    document.getElementById('preview').style.transform = (facing==='user') ? 'scaleX(-1)' : 'none';
+    setBadge('대기 중');
+    // 권한 허용 후에야 카메라 목록/라벨을 볼 수 있음
+    await listCams();
+    const t0 = stream.getVideoTracks()[0];
+    const curId = (t0.getSettings && t0.getSettings().deviceId) || '';
+    const i = videoDevices.findIndex(d=>d.deviceId===curId);
+    devIndex = i>=0 ? i : 0;
+    if(videoDevices.length < 2) document.getElementById('flipBtn').style.display = 'none';   // 카메라 1개면 숨김
+  }catch(e){ setStatus('카메라 권한이 필요해요. 권한을 허용하고 새로고침해 주세요.'); return; }
+  connectWS();
+}
+
+function connectWS(){
+  const proto = location.protocol==='https:' ? 'wss' : 'ws';
+  ws = new WebSocket(proto+'://'+location.host);
+  ws.onopen = ()=>{ ws.send(JSON.stringify({type:'join', room, role:'camera'})); setStatus('태블릿을 기다리는 중…'); };
+  ws.onclose = ()=>{ setBadge('재연결…'); setTimeout(connectWS, 2000); };   // 신호 서버 재연결
+  ws.onmessage = async (e)=>{
+    let m; try{ m=JSON.parse(e.data); }catch{ return; }
+    if(m.type==='ready'){ await makeOffer(); }
+    else if(m.type==='answer'){ try{ await pc.setRemoteDescription(m.sdp); }catch(err){} }
+    else if(m.type==='ice' && m.candidate){ try{ await pc.addIceCandidate(m.candidate); }catch(err){} }
+    else if(m.type==='cmd' && m.action==='capture'){ sendPhoto(m.reqId); }   // 태블릿의 촬영 요청 → 원본 캡처 전송
+    else if(m.type==='peer' && m.event==='leave' && m.role==='viewer'){ setStatus('태블릿 연결이 종료됐어요.'); setBadge('대기 중'); }
+  };
+}
+
+// 원본 해상도로 한 컷 캡처해서 태블릿으로 전송 (WebRTC 압축을 거치지 않아 고화질)
+function sendPhoto(reqId){
+  try{
+    const v = document.getElementById('preview');
+    const w = v.videoWidth || 1080, h = v.videoHeight || 1920;
+    const c = document.createElement('canvas'); c.width=w; c.height=h;
+    const ctx = c.getContext('2d');
+    ctx.translate(w,0); ctx.scale(-1,1);          // 태블릿 프리뷰가 좌우반전이므로 캡처도 반전(WYSIWYG)
+    ctx.drawImage(v, 0,0, w,h);
+    const data = c.toDataURL('image/jpeg', 0.92);
+    if(ws && ws.readyState===1) ws.send(JSON.stringify({type:'photo', reqId, data}));
+  }catch(e){}
+}
+
+async function makeOffer(){
+  if(pc) return;                                   // 이미 연결 진행됨
+  pc = new RTCPeerConnection({ iceServers:[{urls:'stun:stun.l.google.com:19302'}] });
+  sender = pc.addTrack(stream.getVideoTracks()[0], stream);
+  // 라이브 프리뷰 화질↑ (비트레이트 상향 + 해상도 유지)
+  try{
+    const p=sender.getParameters(); if(!p.encodings || !p.encodings.length) p.encodings=[{}];
+    p.encodings[0].maxBitrate = 6000000; p.degradationPreference = 'maintain-resolution';
+    await sender.setParameters(p);
+  }catch(e){}
+  pc.onicecandidate = (e)=>{ if(e.candidate && ws.readyState===1) ws.send(JSON.stringify({type:'ice', candidate:e.candidate})); };
+  pc.onconnectionstatechange = ()=>{
+    const st = pc.connectionState;
+    if(st==='connected'){ setStatus('태블릿에 연결됐어요! 이제 태블릿을 보며 포즈를 취하세요.'); setBadge('LIVE', true); }
+    else if(st==='disconnected'){ setStatus('연결이 잠깐 불안정해요…'); setBadge('재연결…'); scheduleReconnect(); }
+    else if(st==='failed'){ setStatus('연결이 끊겨 다시 연결하는 중…'); setBadge('재연결…'); reconnect(); }
+  };
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  ws.send(JSON.stringify({type:'offer', sdp:pc.localDescription}));
+}
+
+let reconnectTimer=null;
+function scheduleReconnect(){ clearTimeout(reconnectTimer);
+  reconnectTimer=setTimeout(()=>{ if(pc && (pc.connectionState==='disconnected'||pc.connectionState==='failed')) reconnect(); }, 3000); }
+async function reconnect(){
+  try{ if(pc) pc.close(); }catch(e){} pc=null;
+  // 화면 꺼짐 등으로 카메라 트랙이 끝났으면 다시 획득
+  const tr = stream && stream.getVideoTracks()[0];
+  if(!tr || tr.readyState==='ended'){
+    try{ const ns=await getCam(curDeviceId()); if(stream) stream.getTracks().forEach(t=>t.stop()); stream=ns;
+      document.getElementById('preview').srcObject=stream;
+      document.getElementById('preview').style.transform=(facing==='user')?'scaleX(-1)':'none';
+    }catch(e){ setStatus('카메라를 다시 켜지 못했어요. 새로고침해 주세요.'); return; }
+  }
+  if(ws && ws.readyState===1) makeOffer(); else connectWS();
+}
+
+let flipping = false;
+document.getElementById('flipBtn').onclick = async ()=>{
+  if(flipping) return; flipping = true;
+  try{
+    if(videoDevices.length < 2){ await listCams(); }
+    if(videoDevices.length < 2){ setStatus('이 기기엔 전환할 카메라가 하나뿐이에요.'); return; }
+    const want = (facing==='user') ? 'environment' : 'user';
+    // 원하는 방향의 카메라를 라벨로 찾고, 없으면 다음 카메라로 순환
+    let idx = videoDevices.findIndex((d,n)=>n!==devIndex && matchFacing(d.label, want));
+    if(idx < 0) idx = (devIndex + 1) % videoDevices.length;
+    const prevIdx = devIndex, prevFacing = facing;
+    // 단일 카메라 리소스 충돌 방지: 새 카메라 열기 전에 현재 트랙을 먼저 정지
+    try{ if(stream) stream.getVideoTracks().forEach(t=>t.stop()); }catch(e){}
+    try{
+      stream = await getCam(videoDevices[idx].deviceId);
+      devIndex = idx;
+      const lbl = videoDevices[idx].label || '';
+      facing = matchFacing(lbl,'environment') ? 'environment' : (matchFacing(lbl,'user') ? 'user' : want);
+      const v = document.getElementById('preview');
+      v.srcObject = stream; v.style.transform = (facing==='user') ? 'scaleX(-1)' : 'none';
+      const track = stream.getVideoTracks()[0];
+      if(sender) await sender.replaceTrack(track);      // 연결 유지한 채 카메라만 교체
+      setStatus('카메라 전환됨 (' + (facing==='user' ? '전면' : '후면') + ')');
+    }catch(e){
+      // 실패 → 이전 카메라로 복구
+      devIndex = prevIdx; facing = prevFacing;
+      try{
+        stream = await getCam(curDeviceId());
+        document.getElementById('preview').srcObject = stream;
+        const t = stream.getVideoTracks()[0]; if(sender && t) await sender.replaceTrack(t);
+      }catch(e2){}
+      setStatus('이 기기에서 카메라 전환이 지원되지 않을 수 있어요.');
+    }
+  } finally { flipping = false; }
+};
+
+// 화면 꺼짐 방지(가능한 기기)
+if('wakeLock' in navigator){ navigator.wakeLock.request('screen').catch(()=>{}); document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') navigator.wakeLock.request('screen').catch(()=>{}); }); }
+
+init();
+</script>
+</body>
+</html>

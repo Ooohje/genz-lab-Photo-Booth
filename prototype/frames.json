@@ -1,0 +1,52 @@
+{
+  "canvas": { "width": 1080, "height": 1350 },
+  "cornerRadiusPct": 3.33,
+  "cells": [
+    { "x": 9.85,  "y": 6.5,  "w": 38.95, "h": 40.22 },
+    { "x": 51.05, "y": 6.5,  "w": 38.95, "h": 40.22 },
+    { "x": 9.85,  "y": 48.5, "w": 38.95, "h": 40.22 },
+    { "x": 51.05, "y": 48.5, "w": 38.95, "h": 40.22 }
+  ],
+  "header": { "text": "2026 GALAXY IDEATHON", "color": "#f5f500", "y": 3.4, "size": 0.05 },
+  "bottom": [ { "src": "assets/genzlab-logo.png", "align": "center", "x": 50, "y": 91.6, "h": 5.4 } ],
+  "datePos": { "x": 50, "y": 96.3 },
+  "frames": [
+    {
+      "id": "theme1", "name": "테마 1",
+      "background": { "type": "gradient", "angle": 150, "stops": [[0, "#071747"], [0.5, "#0d1330"], [1, "#12101b"]] },
+      "dateColor": "rgba(255,255,255,.95)"
+    },
+    {
+      "id": "theme2", "name": "테마 2",
+      "background": { "type": "gradient", "angle": 150, "stops": [[0, "#071747"], [0.5, "#0d1330"], [1, "#12101b"]] },
+      "dateColor": "rgba(255,255,255,.95)",
+      "bottom": [
+        { "src": "assets/samsung-wordmark.png", "align": "left",  "x": 7,  "y": 93.7, "h": 3.4 },
+        { "src": "assets/genzlab-logo.png",     "align": "right", "x": 93, "y": 93.5, "h": 4.6 }
+      ],
+      "datePos": { "x": 50, "y": 93.9 }
+    },
+    {
+      "id": "theme3", "name": "테마 3",
+      "background": { "type": "gradient", "angle": 150, "stops": [[0, "#071747"], [0.5, "#0d1330"], [1, "#12101b"]] },
+      "dateColor": "rgba(255,255,255,.95)",
+      "bottom": [
+        { "src": "assets/samsung-wordmark.png", "align": "left",   "x": 7,  "y": 93.7, "h": 3.4 },
+        { "src": "frames/mascot.png",           "align": "center", "x": 50, "y": 92.8, "h": 7.8 },
+        { "src": "assets/genzlab-logo.png",     "align": "right",  "x": 93, "y": 93.5, "h": 4.6 }
+      ],
+      "datePos": { "x": 50, "y": 98.4 }
+    },
+    {
+      "id": "theme4", "name": "테마 4",
+      "background": { "type": "gradient", "angle": 135, "stops": [[0, "#ffffff"], [1, "#eef1f7"]] },
+      "header": { "text": "2026 GALAXY IDEATHON", "color": "#93cf3f", "y": 3.4, "size": 0.05 },
+      "dateColor": "rgba(20,25,60,.95)",
+      "bottom": [
+        { "src": "assets/samsung-wordmark.png", "align": "left",  "x": 7,  "y": 93.7, "h": 3.4, "tint": "#111111" },
+        { "src": "assets/genzlab-logo.png",     "align": "right", "x": 93, "y": 93.5, "h": 4.6, "tint": "#0a1440" }
+      ],
+      "datePos": { "x": 50, "y": 93.9 }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "galaxy-ideathon-photobooth",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.21.0"
+  }
+}

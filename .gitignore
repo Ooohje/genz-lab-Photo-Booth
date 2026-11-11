@@ -1,0 +1,27 @@
+# 의존성
+node_modules/
+
+# 실행 중 생성되는 데이터 (손님 사진·영상, 누적 횟수)
+uploads/
+count.json
+
+# 행사 결과물 (실제 참가자 사진·영상)
+아이디어톤 네컷 사진영상/
+*.zip
+
+# 로컬 작업 메모 (공개 주소·계정 정보 포함)
+프로젝트-현황.md
+실행방법-README.md
+
+# 디자인 원본·참고 자료·별도 프로젝트
+template/
+reference/
+2026 GALAXY IDEATHON 소개 html/
+/GenZ Lab._Logo.png
+/Samsung_Orig_Wordmark_WHITE_RGB.png
+/글리밍.png
+serve.mjs
+
+# 도구 설정
+.claude/
+.omc/
